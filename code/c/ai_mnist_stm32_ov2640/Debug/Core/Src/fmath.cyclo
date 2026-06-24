@@ -1,0 +1,8 @@
+../Core/Src/fmath.c:114:7:fast_expf	1
+../Core/Src/fmath.c:133:7:fast_cbrtf	5
+../Core/Src/fmath.c:144:14:fast_atanf	5
+../Core/Src/fmath.c:190:7:fast_atan2f	11
+../Core/Src/fmath.c:207:7:fast_log2	1
+../Core/Src/fmath.c:218:7:fast_log	1
+../Core/Src/fmath.c:223:7:fast_powf	1
+../Core/Src/fmath.c:230:6:fast_get_min_max	4

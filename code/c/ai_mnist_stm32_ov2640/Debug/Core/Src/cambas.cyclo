@@ -1,0 +1,2 @@
+../Core/Src/cambas.c:11:5:cambus_readb	3
+../Core/Src/cambas.c:22:5:cambus_writeb	2
