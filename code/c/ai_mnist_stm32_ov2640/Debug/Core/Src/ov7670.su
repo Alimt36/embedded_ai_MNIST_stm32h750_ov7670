@@ -1,0 +1,4 @@
+../Core/Src/ov7670.c:47:19:OV7670_WriteReg	32	static
+../Core/Src/ov7670.c:62:19:OV7670_ReadReg	40	static
+../Core/Src/ov7670.c:78:26:write_regs	24	static
+../Core/Src/ov7670.c:97:19:OV7670_Init	24	static

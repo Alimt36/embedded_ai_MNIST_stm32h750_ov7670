@@ -21,7 +21,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "ov2640.h"
+#include "ov2640_regs.h"
 
+#include "ov7670.h"
+
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,7 +55,11 @@ I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
+sensor_t sensor = {0};
+uint8_t frame_buf[160 * 120 * 2];   // QQVGA YUV422 → 2 bytes per pixel
 
+uint8_t  gray_buf[160 * 120];      // Y channel extracted from YUV422
+uint8_t  small_buf[14 * 14];       // final 14x14 output
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,7 +71,10 @@ static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
+static void sensor_setting(void);
 
+static void extract_gray(uint8_t *src, uint8_t *dst);
+static void downsample_14x14(uint8_t *src, uint8_t *dst);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -107,19 +120,95 @@ int main(void)
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 
+/* USER CODE BEGIN 2 */
+
+// ---> init RST and PWDN pins FIRST
+HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);  // PWDN low  ---> camera ON
+HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);    // RST  high ---> out of reset
+HAL_Delay(200);                                         // ---> wait for camera to boot
+
+// ---> I2C scan
+uint8_t scan_result;
+for(uint8_t addr = 1; addr < 128; addr++)
+{
+    if(HAL_I2C_IsDeviceReady(&hi2c1, addr << 1, 1, 10) == HAL_OK)
+    {
+        scan_result = addr;
+        HAL_UART_Transmit(&huart3, (uint8_t*)"FOUND:", 6, 100);
+        HAL_UART_Transmit(&huart3, &scan_result, 1, 100);
+        HAL_UART_Transmit(&huart3, (uint8_t*)"\r\n", 2, 100);
+    }
+}
+
+// ---> init OV7670
+if(OV7670_Init(&hi2c1) != HAL_OK)
+{
+    HAL_UART_Transmit(&huart3, (uint8_t*)"CAM_ERROR\r\n", 11, 100);
+    Error_Handler();
+}
+
+HAL_UART_Transmit(&huart3, (uint8_t*)"CAM_OK\r\n", 8, 100);
+
+// ---> start capture
+HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buf, sizeof(frame_buf)/4);
+
+// ---> wait longer for frame
+HAL_Delay(2000);
+
+// ---> check DCMI status
+uint32_t dcmi_sr = DCMI->SR;
+uint8_t sr_buf[30];
+sprintf((char*)sr_buf, "DCMI_SR:%lu\r\n", dcmi_sr);
+HAL_UART_Transmit(&huart3, sr_buf, strlen((char*)sr_buf), 100);
+
+HAL_DCMI_Stop(&hdcmi);
+
+
+// ---> check if frame buffer has any non-zero data
+uint32_t nonzero = 0;
+for(int i = 0; i < sizeof(frame_buf); i++)
+{
+    if(frame_buf[i] != 0) nonzero++;
+}
+uint8_t dbg[30];
+sprintf((char*)dbg, "NONZERO:%lu\r\n", nonzero);
+HAL_UART_Transmit(&huart3, dbg, strlen((char*)dbg), 100);
+
+
+// // ---> preprocess and send over UART
+// extract_gray(frame_buf, gray_buf);
+// downsample_14x14(gray_buf, small_buf);
+// HAL_UART_Transmit(&huart3, small_buf, 196, 1000);
+
+// ---> send raw frame buffer over UART for PC inspection
+HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_START\r\n", 13, 100);
+HAL_UART_Transmit(&huart3, frame_buf, 160 * 120 * 2, 5000);
+HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+/* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+      // ---> capture frame
+      HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buf, sizeof(frame_buf)/4);
+      HAL_Delay(500);
+      HAL_DCMI_Stop(&hdcmi);
 
-    /* USER CODE BEGIN 3 */
+      // ---> send raw frame
+      HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_START\r\n", 13, 100);
+      HAL_UART_Transmit(&huart3, frame_buf, 160 * 120 * 2, 5000);
+
+      HAL_Delay(100);
+      /* USER CODE END WHILE */
+
+      /* USER CODE BEGIN 3 */
+  
   }
   /* USER CODE END 3 */
 }
-
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -197,7 +286,7 @@ static void MX_DCMI_Init(void)
   hdcmi.Instance = DCMI;
   hdcmi.Init.SynchroMode = DCMI_SYNCHRO_HARDWARE;
   hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_RISING;
-  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_LOW;
+  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_HIGH;
   hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_LOW;
   hdcmi.Init.CaptureRate = DCMI_CR_ALL_FRAME;
   hdcmi.Init.ExtendedDataMode = DCMI_EXTEND_DATA_8B;
@@ -382,6 +471,101 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+//---------------------------------------------------------------------------------------------------------------------------
+// sensor_setting :
+//   ---> initializes the OV2640 camera sensor
+//   ---> sets format to YUV422 and resolution to QQVGA (160x120)
+//   ---> inputs : none
+//   ---> outputs : none
+//---------------------------------------------------------------------------------------------------------------------------
+static void sensor_setting(void)
+{
+    // ---> control PWDN and RST pins
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);  // PWDN low  ---> camera ON
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);    // RST  high ---> out of reset
+    HAL_Delay(100);
+
+    // ---> link I2C bus and init sensor struct
+    sensor.bus.i2c = &hi2c1;
+    ov2640_init(&sensor);
+
+    // ---> verify camera ID over SCCB
+    sensor.write_reg(&sensor, BANK_SEL, 0x01);
+    if(sensor.read_reg(&sensor, REG_PID) != sensor.pid)  Error_Handler();
+    if(sensor.read_reg(&sensor, REG_VER) != sensor.rev)  Error_Handler();
+
+    // ---> set format and resolution
+    sensor.pixformat  = PIXFORMAT_YUV422;
+    sensor.framesize  = FRAMESIZE_QQVGA;
+
+    sensor.contrast_level   = 2;
+    sensor.brightness_level = 2;
+    sensor.saturation_level = 2;
+
+    if(sensor.reset(&sensor) == -1)  Error_Handler();
+    if(sensor.set(&sensor)   == -1)  Error_Handler();
+}
+//---------------------------------------------------------------------------------------------------------------------------
+
+
+
+//---------------------------------------------------------------------------------------------------------------------------
+// extract_gray :
+//   ---> extracts Y channel from YUV422 frame buffer
+//   ---> YUV422 format : Y0 U0 Y1 V0 Y2 U2 Y3 V2 ...
+//   ---> inputs  : src  ---> YUV422 buffer (160*120*2 bytes)
+//   ---> outputs : dst  ---> grayscale buffer (160*120 bytes)
+//---------------------------------------------------------------------------------------------------------------------------
+// static void extract_gray(uint8_t *src, uint8_t *dst)
+// {
+//     for(int i = 0; i < 160 * 120; i++)
+//     {
+//         dst[i] = src[i * 2];     // ---> Y byte is at every even index
+//     }
+// }
+static void extract_gray(uint8_t *src, uint8_t *dst)
+{
+    for(int i = 0; i < 160 * 120; i++)
+    {
+        dst[i] = src[i * 2 + 1];     // ---> try odd index instead
+    }
+}
+//---------------------------------------------------------------------------------------------------------------------------
+
+//---------------------------------------------------------------------------------------------------------------------------
+// downsample_14x14 :
+//   ---> center crops 112x112 from 160x120 grayscale then 8x8 avg pools to 14x14
+//   ---> crop offset : x_off=24, y_off=4 to center the 112x112 window
+//   ---> inputs  : src ---> grayscale buffer (160*120 bytes)
+//   ---> outputs : dst ---> 14x14 buffer (196 bytes)
+//---------------------------------------------------------------------------------------------------------------------------
+static void downsample_14x14(uint8_t *src, uint8_t *dst)
+{
+    int x_off = 24;    // ---> (160 - 112) / 2
+    int y_off = 4;     // ---> (120 - 112) / 2
+
+    for(int row = 0; row < 14; row++)
+    {
+        for(int col = 0; col < 14; col++)
+        {
+            uint32_t sum = 0;
+
+            // ---> average over 8x8 block
+            for(int dy = 0; dy < 8; dy++)
+            {
+                for(int dx = 0; dx < 8; dx++)
+                {
+                    int y = y_off + row * 8 + dy;
+                    int x = x_off + col * 8 + dx;
+                    sum += src[y * 160 + x];
+                }
+            }
+
+            dst[row * 14 + col] = (uint8_t)(sum / 64);
+        }
+    }
+}
+//---------------------------------------------------------------------------------------------------------------------------
 
 /* USER CODE END 4 */
 

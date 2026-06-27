@@ -1,0 +1,4 @@
+../Core/Src/ov7670.c:47:19:OV7670_WriteReg	1
+../Core/Src/ov7670.c:62:19:OV7670_ReadReg	2
+../Core/Src/ov7670.c:78:26:write_regs	3
+../Core/Src/ov7670.c:97:19:OV7670_Init	2
