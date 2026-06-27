@@ -162,9 +162,14 @@ results = []
 #---------------------------------------------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------------------------------------------
-def downsample_14x14(X):
+# def downsample_14x14(X):
+#     imgs = X.reshape(-1, 28, 28)
+#     return imgs.reshape(-1, 14, 2, 14, 2).mean(axis=(2, 4)).reshape(-1, 196)
+#---------------------------------------------------------------------------------------------------------------------------
+def downsample_20x20(X):
     imgs = X.reshape(-1, 28, 28)
-    return imgs.reshape(-1, 14, 2, 14, 2).mean(axis=(2, 4)).reshape(-1, 196)
+    return imgs[:, 4:24, 4:24].reshape(-1, 400)
+#---------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------------------------------------------
@@ -222,13 +227,18 @@ def __main__() -> None:
 
     X_train, X_test, y_train, y_test = load_mnist()
 
-    X_train_14 = downsample_14x14(X_train)
-    X_test_14  = downsample_14x14(X_test)
-
+    # X_train_14 = downsample_14x14(X_train)
+    # X_test_14  = downsample_14x14(X_test)
     # ---> 14x14 input only (196 features)
-    train_and_export("196_32_10",    (32,),    X_train_14, X_test_14, y_train, y_test)
-    train_and_export("196_24_12_10", (24, 12), X_train_14, X_test_14, y_train, y_test)
+    # train_and_export("196_32_10",    (32,),    X_train_14, X_test_14, y_train, y_test)
+    # train_and_export("196_24_12_10", (24, 12), X_train_14, X_test_14, y_train, y_test)
+    
+    
+    X_train_20 = downsample_20x20(X_train)
+    X_test_20  = downsample_20x20(X_test)
+    train_and_export("400_16_10", (16,), X_train_20, X_test_20, y_train, y_test)
 
+    
     print_summary()
 
 __main__()

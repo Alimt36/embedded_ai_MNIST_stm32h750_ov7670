@@ -30,7 +30,8 @@
 #include <string.h>
 
 
-#include "mnist_196_24_12_10.h"
+// #include "mnist_196_24_12_10.h"
+#include "mnist_400_16_10.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,7 +63,7 @@ sensor_t sensor = {0};
 uint8_t frame_buf[160 * 120 * 2];   // QQVGA YUV422 → 2 bytes per pixel
 
 uint8_t  gray_buf[160 * 120];      // Y channel extracted from YUV422
-uint8_t  small_buf[14 * 14];       // final 14x14 output
+uint8_t  small_buf[20 * 20];       // final 14x14 output
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -77,7 +78,8 @@ static void MX_USART3_UART_Init(void);
 static void sensor_setting(void);
 
 static void extract_gray(uint8_t *src, uint8_t *dst);
-static void downsample_14x14(uint8_t *src, uint8_t *dst);
+// static void downsample_14x14(uint8_t *src, uint8_t *dst);
+static void downsample_20x20(uint8_t *src, uint8_t *dst);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -202,17 +204,18 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
 
     // ---> preprocess → 14x14
     extract_gray(frame_buf, gray_buf);
-    downsample_14x14(gray_buf, small_buf);
+    // downsample_14x14(gray_buf, small_buf);
+    downsample_20x20(gray_buf, small_buf);
 
     // ---> normalize to float for emlearn
-    float features[196];
-    for(int i = 0; i < 196; i++)
+    float features[400];
+    for(int i = 0; i < 400; i++)
     {
         features[i] = (float)small_buf[i] / 255.0f;
     }
 
     // ---> run inference
-    int predicted = mnist_model_predict(features, 196);
+    int predicted = mnist_model_predict(features, 400);
 
     // ---> send result over UART
     uint8_t result_buf[20];
@@ -221,7 +224,7 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
 
     // ---> also send 14x14 for visualization
     HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_START\r\n", 13, 100);
-    HAL_UART_Transmit(&huart3, small_buf, 196, 100);
+    HAL_UART_Transmit(&huart3, small_buf, 400, 100);
 
     HAL_Delay(100);
     /* USER CODE END WHILE */
@@ -562,29 +565,67 @@ static void extract_gray(uint8_t *src, uint8_t *dst)
 //   ---> inputs  : src ---> grayscale buffer (160*120 bytes)
 //   ---> outputs : dst ---> 14x14 buffer (196 bytes)
 //---------------------------------------------------------------------------------------------------------------------------
-static void downsample_14x14(uint8_t *src, uint8_t *dst)
-{
-    int x_off = 24;    // ---> (160 - 112) / 2
-    int y_off = 4;     // ---> (120 - 112) / 2
+// static void downsample_14x14(uint8_t *src, uint8_t *dst)
+// {
+//     int x_off = 24;    // ---> (160 - 112) / 2
+//     int y_off = 4;     // ---> (120 - 112) / 2
 
-    for(int row = 0; row < 14; row++)
+//     for(int row = 0; row < 14; row++)
+//     {
+//         for(int col = 0; col < 14; col++)
+//         {
+//             uint32_t sum = 0;
+
+//             // ---> average over 8x8 block
+//             for(int dy = 0; dy < 8; dy++)
+//             {
+//                 for(int dx = 0; dx < 8; dx++)
+//                 {
+//                     int y = y_off + row * 8 + dy;
+//                     int x = x_off + col * 8 + dx;
+//                     sum += src[y * 160 + x];
+//                 }
+//             }
+
+//             dst[row * 14 + col] = (uint8_t)(sum / 64);
+//         }
+//     }
+// }
+
+//---------------------------------------------------------------------------------------------------------------------------
+// downsample_20x20 :
+//   ---> center crops 120x120 from 160x120 grayscale then 6x6 avg pools to 20x20
+//   ---> then applies binarization threshold
+//   ---> crop offset : x_off=20, y_off=0 to center the 120x120 window
+//   ---> inputs  : src ---> grayscale buffer (160*120 bytes)
+//   ---> outputs : dst ---> 20x20 buffer (400 bytes)
+//---------------------------------------------------------------------------------------------------------------------------
+static void downsample_20x20(uint8_t *src, uint8_t *dst)
+{
+    int x_off = 20;    // ---> (160 - 120) / 2
+    int y_off = 0;     // ---> 120 fits exactly
+
+    for(int row = 0; row < 20; row++)
     {
-        for(int col = 0; col < 14; col++)
+        for(int col = 0; col < 20; col++)
         {
             uint32_t sum = 0;
 
-            // ---> average over 8x8 block
-            for(int dy = 0; dy < 8; dy++)
+            // ---> average over 6x6 block
+            for(int dy = 0; dy < 6; dy++)
             {
-                for(int dx = 0; dx < 8; dx++)
+                for(int dx = 0; dx < 6; dx++)
                 {
-                    int y = y_off + row * 8 + dy;
-                    int x = x_off + col * 8 + dx;
+                    int y = y_off + row * 6 + dy;
+                    int x = x_off + col * 6 + dx;
                     sum += src[y * 160 + x];
                 }
             }
 
-            dst[row * 14 + col] = (uint8_t)(sum / 64);
+            uint8_t avg = (uint8_t)(sum / 36);
+
+            // ---> binarize : white paper digit ---> invert + threshold
+            dst[row * 20 + col] = (avg < 128) ? 255 : 0;
         }
     }
 }
