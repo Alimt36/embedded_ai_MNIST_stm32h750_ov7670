@@ -189,7 +189,7 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
   /* USER CODE END 2 */
 
   /* Infinite loop */
-/* USER CODE BEGIN WHILE */
+  /* USER CODE BEGIN WHILE */
   while (1)
   {
       // ---> capture frame
@@ -202,13 +202,14 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
       HAL_UART_Transmit(&huart3, frame_buf, 160 * 120 * 2, 5000);
 
       HAL_Delay(100);
-      /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-      /* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
   
   }
   /* USER CODE END 3 */
 }
+
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -369,7 +370,7 @@ static void MX_USART3_UART_Init(void)
 
   /* USER CODE END USART3_Init 1 */
   huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
+  huart3.Init.BaudRate = 1000000;
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
   huart3.Init.StopBits = UART_STOPBITS_1;
   huart3.Init.Parity = UART_PARITY_NONE;

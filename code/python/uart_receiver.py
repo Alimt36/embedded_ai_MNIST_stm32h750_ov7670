@@ -99,7 +99,9 @@ import serial
 import numpy as np
 import matplotlib.pyplot as plt
 
-ser = serial.Serial('COM12', 115200, timeout=10)
+# ser = serial.Serial('COM12', 115200, timeout=10)
+# ser = serial.Serial('COM12', 921600, timeout=10)
+ser = serial.Serial('COM12', 1000000, timeout=10)
 plt.ion()
 fig, ax = plt.subplots(figsize=(6, 5))
 
