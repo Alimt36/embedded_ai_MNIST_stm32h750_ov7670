@@ -28,6 +28,9 @@
 
 #include <stdio.h>
 #include <string.h>
+
+
+#include "mnist_196_24_12_10.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -123,9 +126,9 @@ int main(void)
 /* USER CODE BEGIN 2 */
 
 // ---> init RST and PWDN pins FIRST
-HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);  // PWDN low  ---> camera ON
-HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);    // RST  high ---> out of reset
-HAL_Delay(200);                                         // ---> wait for camera to boot
+HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);
+HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);
+HAL_Delay(200);                                        // ---> wait for camera to boot
 
 // ---> I2C scan
 uint8_t scan_result;
@@ -192,16 +195,35 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-      // ---> capture frame
-      HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buf, sizeof(frame_buf)/4);
-      HAL_Delay(500);
-      HAL_DCMI_Stop(&hdcmi);
+    // ---> capture
+    HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buf, sizeof(frame_buf)/4);
+    HAL_Delay(500);
+    HAL_DCMI_Stop(&hdcmi);
 
-      // ---> send raw frame
-      HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_START\r\n", 13, 100);
-      HAL_UART_Transmit(&huart3, frame_buf, 160 * 120 * 2, 5000);
+    // ---> preprocess → 14x14
+    extract_gray(frame_buf, gray_buf);
+    downsample_14x14(gray_buf, small_buf);
 
-      HAL_Delay(100);
+    // ---> normalize to float for emlearn
+    float features[196];
+    for(int i = 0; i < 196; i++)
+    {
+        features[i] = (float)small_buf[i] / 255.0f;
+    }
+
+    // ---> run inference
+    int predicted = mnist_model_predict(features, 196);
+
+    // ---> send result over UART
+    uint8_t result_buf[20];
+    sprintf((char*)result_buf, "DIGIT:%d\r\n", predicted);
+    HAL_UART_Transmit(&huart3, result_buf, strlen((char*)result_buf), 100);
+
+    // ---> also send 14x14 for visualization
+    HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_START\r\n", 13, 100);
+    HAL_UART_Transmit(&huart3, small_buf, 196, 100);
+
+    HAL_Delay(100);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
