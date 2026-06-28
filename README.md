@@ -4,13 +4,13 @@ A fully embedded ML system — an OV7670 camera captures a handwritten digit on 
 
 ---
 
-## Output
+## Output:
 
 ![Output](assets/output.jpg)
 
 ---
 
-## Repository Structure
+## Repository Structure:
 
 ```
 ai_mnist_stm32_ov2640/
@@ -40,7 +40,7 @@ ai_mnist_stm32_ov2640/
 
 ---
 
-## Hardware
+## Hardware:
 
 ```
 MCU      : STM32H750VBT6  ---> DevEBox v2.0 board @ 480MHz
@@ -51,7 +51,7 @@ Pull-ups : 2x 4.7KΩ      ---> on SDA and SCL lines
 
 ---
 
-## Wiring
+## Wiring:
 
 ```
 OV7670 SIOC  ---> STM32 PB6   (I2C1 SCL)
@@ -80,7 +80,7 @@ OV7670 GND   ---> GND          -------
 
 ---
 
-## How It Works
+## How It Works:
 
 ```
 OV7670 streams YUV422 pixels via DCMI + DMA ---> frame_buf (38KB in RAM)
@@ -102,7 +102,7 @@ Predicted digit 0-9 ---> UART TX ---> PC Python viewer
 
 ---
 
-## ML Model
+## ML Model:
 
 ```
 Dataset      : MNIST (60K train / 10K test)
@@ -121,7 +121,7 @@ The model is exported as a C header with no dynamic allocation — weights are `
 
 ---
 
-## emlearn
+## emlearn!
 
 [emlearn](https://github.com/emlearn/emlearn) is what makes this whole project possible on a 128KB flash MCU. It takes a trained scikit-learn model and converts it to a pure C header file — no runtime library, no dynamic memory, no dependencies. The generated header contains the weight arrays and a single predict function. You include it, call it, done.
 
@@ -129,7 +129,7 @@ No TensorFlow Lite, no X-CUBE-AI, no CMSIS-NN — just a header file and arithme
 
 ---
 
-## CubeMX Configuration
+## CubeMX Configuration:
 
 ```
 RCC HSE      : 25MHz crystal                         ---> main clock source
@@ -168,7 +168,7 @@ The OV7670 has a manually adjustable lens — rotate the lens barrel to focus. F
 
 ---
 
-## Main Point:
+## Main Points:
 
 - DevEBox v2.0 has a non-standard camera connector — pin 1 does NOT match OV7670 flex cable pin 1. Using the connector killed an OV2640 during development.
 - OV7670 I2C address is `0x21` (7-bit) → `0x42` write address. RST and PWDN pins must be initialized before the I2C scan or the camera won't respond.
@@ -181,7 +181,7 @@ The OV7670 has a manually adjustable lens — rotate the lens barrel to focus. F
 
 ---
 
-## Memory Usage
+## Memory Usage:
 
 ```
 Flash 128KB:
