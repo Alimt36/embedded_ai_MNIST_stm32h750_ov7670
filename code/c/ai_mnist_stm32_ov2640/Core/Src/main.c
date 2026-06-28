@@ -21,8 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "ov2640.h"
-#include "ov2640_regs.h"
+// #include "ov2640.h"
+// #include "ov2640_regs.h"
 
 #include "ov7670.h"
 
@@ -31,7 +31,8 @@
 
 
 // #include "mnist_196_24_12_10.h"
-#include "mnist_400_16_10.h"
+// #include "mnist_400_16_10.h"
+#include "mnist_784_8_10.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,11 +60,11 @@ I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-sensor_t sensor = {0};
+// sensor_t sensor = {0};
 uint8_t frame_buf[160 * 120 * 2];   // QQVGA YUV422 → 2 bytes per pixel
 
 uint8_t  gray_buf[160 * 120];      // Y channel extracted from YUV422
-uint8_t  small_buf[20 * 20];       // final 14x14 output
+uint8_t  small_buf[28* 28];       // final 14x14 output
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -75,11 +76,12 @@ static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
-static void sensor_setting(void);
+// static void sensor_setting(void);
 
 static void extract_gray(uint8_t *src, uint8_t *dst);
 // static void downsample_14x14(uint8_t *src, uint8_t *dst);
-static void downsample_20x20(uint8_t *src, uint8_t *dst);
+// static void downsample_20x20(uint8_t *src, uint8_t *dst);
+static void downsample_28x28(uint8_t *src, uint8_t *dst);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -205,17 +207,21 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
     // ---> preprocess → 14x14
     extract_gray(frame_buf, gray_buf);
     // downsample_14x14(gray_buf, small_buf);
-    downsample_20x20(gray_buf, small_buf);
+    // downsample_20x20(gray_buf, small_buf);
+    downsample_28x28(gray_buf, small_buf);
 
     // ---> normalize to float for emlearn
-    float features[400];
-    for(int i = 0; i < 400; i++)
+    // float features[400];
+    // for(int i = 0; i < 400; i++)
+    float features[784];
+    for(int i = 0; i < 784; i++)
     {
         features[i] = (float)small_buf[i] / 255.0f;
     }
 
     // ---> run inference
-    int predicted = mnist_model_predict(features, 400);
+    // int predicted = mnist_model_predict(features, 400);
+    int predicted = mnist_model_predict(features, 784);
 
     // ---> send result over UART
     uint8_t result_buf[20];
@@ -224,9 +230,12 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
 
     // ---> also send 14x14 for visualization
     HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_START\r\n", 13, 100);
-    HAL_UART_Transmit(&huart3, small_buf, 400, 100);
+    // HAL_UART_Transmit(&huart3, small_buf, 400, 100);
+    HAL_UART_Transmit(&huart3, small_buf, 784, 100);
 
     HAL_Delay(100);
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -504,33 +513,33 @@ static void MX_GPIO_Init(void)
 //   ---> inputs : none
 //   ---> outputs : none
 //---------------------------------------------------------------------------------------------------------------------------
-static void sensor_setting(void)
-{
-    // ---> control PWDN and RST pins
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);  // PWDN low  ---> camera ON
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);    // RST  high ---> out of reset
-    HAL_Delay(100);
+// static void sensor_setting(void)
+// {
+//     // ---> control PWDN and RST pins
+//     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);  // PWDN low  ---> camera ON
+//     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);    // RST  high ---> out of reset
+//     HAL_Delay(100);
 
-    // ---> link I2C bus and init sensor struct
-    sensor.bus.i2c = &hi2c1;
-    ov2640_init(&sensor);
+//     // ---> link I2C bus and init sensor struct
+//     sensor.bus.i2c = &hi2c1;
+//     ov2640_init(&sensor);
 
-    // ---> verify camera ID over SCCB
-    sensor.write_reg(&sensor, BANK_SEL, 0x01);
-    if(sensor.read_reg(&sensor, REG_PID) != sensor.pid)  Error_Handler();
-    if(sensor.read_reg(&sensor, REG_VER) != sensor.rev)  Error_Handler();
+//     // ---> verify camera ID over SCCB
+//     sensor.write_reg(&sensor, BANK_SEL, 0x01);
+//     if(sensor.read_reg(&sensor, REG_PID) != sensor.pid)  Error_Handler();
+//     if(sensor.read_reg(&sensor, REG_VER) != sensor.rev)  Error_Handler();
 
-    // ---> set format and resolution
-    sensor.pixformat  = PIXFORMAT_YUV422;
-    sensor.framesize  = FRAMESIZE_QQVGA;
+//     // ---> set format and resolution
+//     sensor.pixformat  = PIXFORMAT_YUV422;
+//     sensor.framesize  = FRAMESIZE_QQVGA;
 
-    sensor.contrast_level   = 2;
-    sensor.brightness_level = 2;
-    sensor.saturation_level = 2;
+//     sensor.contrast_level   = 2;
+//     sensor.brightness_level = 2;
+//     sensor.saturation_level = 2;
 
-    if(sensor.reset(&sensor) == -1)  Error_Handler();
-    if(sensor.set(&sensor)   == -1)  Error_Handler();
-}
+//     if(sensor.reset(&sensor) == -1)  Error_Handler();
+//     if(sensor.set(&sensor)   == -1)  Error_Handler();
+// }
 //---------------------------------------------------------------------------------------------------------------------------
 
 
@@ -600,36 +609,131 @@ static void extract_gray(uint8_t *src, uint8_t *dst)
 //   ---> inputs  : src ---> grayscale buffer (160*120 bytes)
 //   ---> outputs : dst ---> 20x20 buffer (400 bytes)
 //---------------------------------------------------------------------------------------------------------------------------
-static void downsample_20x20(uint8_t *src, uint8_t *dst)
-{
-    int x_off = 20;    // ---> (160 - 120) / 2
-    int y_off = 0;     // ---> 120 fits exactly
+// static void downsample_20x20(uint8_t *src, uint8_t *dst)
+// {
+//     // ---> use only center 120x100 region to avoid edge noise
+//     // ---> x: 20 to 140 (skip 20px each side)
+//     // ---> y: 10 to 110 (skip 10px top and bottom)
+//     int x_start = 20;
+//     int y_start = 10;
+//     int width   = 120;   // ---> 140 - 20
+//     int height  = 100;   // ---> 110 - 10
 
-    for(int row = 0; row < 20; row++)
+//     // ---> compute threshold from this safe region only
+//     uint32_t total = 0;
+//     for(int y = y_start; y < y_start + height; y++)
+//         for(int x = x_start; x < x_start + width; x++)
+//             total += src[y * 160 + x];
+//     uint8_t threshold = (uint8_t)(total / (width * height));
+
+//     // ---> downsample safe region to 20x20
+//     // ---> each block is 6x5 pixels
+//     for(int row = 0; row < 28; row++)
+//     {
+//         for(int col = 0; col < 28; col++)
+//         {
+//             uint32_t sum = 0;
+
+//             for(int dy = 0; dy < 5; dy++)
+//             {
+//                 for(int dx = 0; dx < 6; dx++)
+//                 {
+//                     int y = y_start + row * 5 + dy;
+//                     int x = x_start + col * 6 + dx;
+//                     sum += src[y * 160 + x];
+//                 }
+//             }
+
+//             uint8_t avg = (uint8_t)(sum / 30);
+
+//             // ---> dark digit on white paper → white on black like MNIST
+//             dst[row * 20 + col] = (avg < threshold) ? 255 : 0;
+//         }
+//     }
+
+//     // ---> force border pixels black ---> remove edge artifacts
+//     for(int i = 0; i < 28; i++)
+//     {
+//         dst[i *  28 + 0]  = 0;   // ---> left col 1
+//         dst[i *  28 + 1]  = 0;   // ---> left col 2
+//         dst[i *  28 + 2]  = 0;   // ---> left col 3
+//         dst[i *  28 + 17] = 0;   // ---> right col 3
+//         dst[i *  28 + 18] = 0;   // ---> right col 2
+//         dst[i *  28 + 19] = 0;   // ---> right col 1
+//         dst[0  * 28 + i] = 0;   // ---> top row
+//         dst[19 * 28 + i] = 0;   // ---> bottom row
+//     }
+
+// }
+//---------------------------------------------------------------------------------------------------------------------------
+// downsample_28x28 :
+//   ---> center crops 120x120 from 160x120 then downsamples to 28x28
+//   ---> each block is ~4x4 pixels
+//   ---> applies adaptive threshold + inversion to match MNIST style
+//   ---> inputs  : src ---> grayscale buffer (160*120 bytes)
+//   ---> outputs : dst ---> 28x28 buffer (784 bytes)
+//---------------------------------------------------------------------------------------------------------------------------
+static void downsample_28x28(uint8_t *src, uint8_t *dst)
+{
+    int x_start = 35;    // ---> crop more from left and right
+    int y_start = 15;    // ---> crop more from top and bottom
+    int width   = 90;    // ---> was 120, now narrower
+    int height  = 90;    // ---> was 120, now shorter
+
+    // ---> compute adaptive threshold from center region
+    uint32_t total = 0;
+    for(int y = y_start + 5; y < y_start + height - 5; y++)
+      for(int x = x_start + 5; x < x_start + width - 5; x++)
+            total += src[y * 160 + x];
+    uint8_t threshold = (uint8_t)(total / (100 * 100));
+
+    // ---> downsample to 28x28
+    for(int row = 0; row < 28; row++)
     {
-        for(int col = 0; col < 20; col++)
+        for(int col = 0; col < 28; col++)
         {
             uint32_t sum = 0;
+            int count = 0;
 
-            // ---> average over 6x6 block
-            for(int dy = 0; dy < 6; dy++)
+            for(int dy = 0; dy < 4; dy++)
             {
-                for(int dx = 0; dx < 6; dx++)
+                for(int dx = 0; dx < 4; dx++)
                 {
-                    int y = y_off + row * 6 + dy;
-                    int x = x_off + col * 6 + dx;
-                    sum += src[y * 160 + x];
+                    int y = y_start + (row * height / 28) + dy;
+                    int x = x_start + (col * width  / 28) + dx;
+                    if(y < 120 && x < 160)
+                    {
+                        sum += src[y * 160 + x];
+                        count++;
+                    }
                 }
             }
 
-            uint8_t avg = (uint8_t)(sum / 36);
+            uint8_t avg = count > 0 ? (uint8_t)(sum / count) : 128;
 
-            // ---> binarize : white paper digit ---> invert + threshold
-            dst[row * 20 + col] = (avg < 128) ? 255 : 0;
+            // ---> invert: dark digit on white paper → white on black like MNIST
+            dst[row * 28 + col] = (avg < threshold) ? 255 : 0;
         }
+    }
+
+    // ---> force border to black
+    for(int i = 0; i < 28; i++)
+    {
+      dst[i * 28 + 0]  = 0;
+      dst[i * 28 + 1]  = 0;
+      dst[i * 28 + 2]  = 0;
+      dst[i * 28 + 27] = 0;
+      dst[i * 28 + 26] = 0;
+      dst[i * 28 + 25] = 0;
+      dst[0  * 28 + i] = 0;
+      dst[1  * 28 + i] = 0;
+      dst[27 * 28 + i] = 0;
+      dst[26 * 28 + i] = 0;
     }
 }
 //---------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------
+
 
 /* USER CODE END 4 */
 

@@ -166,9 +166,14 @@ results = []
 #     imgs = X.reshape(-1, 28, 28)
 #     return imgs.reshape(-1, 14, 2, 14, 2).mean(axis=(2, 4)).reshape(-1, 196)
 #---------------------------------------------------------------------------------------------------------------------------
-def downsample_20x20(X):
-    imgs = X.reshape(-1, 28, 28)
-    return imgs[:, 4:24, 4:24].reshape(-1, 400)
+# def downsample_20x20(X):
+#     imgs = X.reshape(-1, 28, 28)
+#     return imgs[:, 4:24, 4:24].reshape(-1, 400)
+#---------------------------------------------------------------------------------------------------------------------------
+def downsample_28x28(X):
+    # ---> MNIST is already 28x28 , no downsampling needed !
+    return X
+#---------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------------
 
@@ -234,9 +239,13 @@ def __main__() -> None:
     # train_and_export("196_24_12_10", (24, 12), X_train_14, X_test_14, y_train, y_test)
     
     
-    X_train_20 = downsample_20x20(X_train)
-    X_test_20  = downsample_20x20(X_test)
-    train_and_export("400_16_10", (16,), X_train_20, X_test_20, y_train, y_test)
+    # X_train_20 = downsample_20x20(X_train)
+    # X_test_20  = downsample_20x20(X_test)
+    # train_and_export("400_16_10", (16,), X_train_20, X_test_20, y_train, y_test)
+
+
+
+    train_and_export("784_8_10", (8,), X_train, X_test, y_train, y_test)
 
     
     print_summary()
