@@ -228,10 +228,14 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
     sprintf((char*)result_buf, "DIGIT:%d\r\n", predicted);
     HAL_UART_Transmit(&huart3, result_buf, strlen((char*)result_buf), 100);
 
-    // ---> also send 14x14 for visualization
+
     HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_START\r\n", 13, 100);
     // HAL_UART_Transmit(&huart3, small_buf, 400, 100);
     HAL_UART_Transmit(&huart3, small_buf, 784, 100);
+
+        // ---> send raw frame
+    HAL_UART_Transmit(&huart3, (uint8_t*)"RAW_START\r\n", 11, 100);
+    HAL_UART_Transmit(&huart3, frame_buf, 160 * 120 * 2, 2000);
 
     HAL_Delay(100);
 
@@ -712,7 +716,11 @@ static void downsample_28x28(uint8_t *src, uint8_t *dst)
             uint8_t avg = count > 0 ? (uint8_t)(sum / count) : 128;
 
             // ---> invert: dark digit on white paper → white on black like MNIST
-            dst[row * 28 + col] = (avg < threshold) ? 255 : 0;
+            // dst[row * 28 + col] = (avg < threshold) ? 255 : 0;
+            
+            // ---> stretch contrast instead of hard threshold
+            // ---> invert so dark digit on white paper becomes bright on dark
+            dst[row * 28 + col] = (avg < threshold) ? (uint8_t)((threshold - avg) * 255 / threshold) : 0;
         }
     }
 
