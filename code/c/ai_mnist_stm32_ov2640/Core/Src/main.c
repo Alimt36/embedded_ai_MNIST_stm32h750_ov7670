@@ -679,15 +679,15 @@ static void extract_gray(uint8_t *src, uint8_t *dst)
 //---------------------------------------------------------------------------------------------------------------------------
 static void downsample_28x28(uint8_t *src, uint8_t *dst)
 {
-    int x_start = 35;    // ---> crop more from left and right
-    int y_start = 15;    // ---> crop more from top and bottom
-    int width   = 90;    // ---> was 120, now narrower
-    int height  = 90;    // ---> was 120, now shorter
+    int x_start = 35;
+    int y_start = 0;     // ---> no top/bottom crop
+    int width   = 90;
+    int height  = 120;   // ---> full height
 
     // ---> compute adaptive threshold from center region
     uint32_t total = 0;
     for(int y = y_start + 5; y < y_start + height - 5; y++)
-      for(int x = x_start + 5; x < x_start + width - 5; x++)
+        for(int x = x_start + 5; x < x_start + width - 5; x++)
             total += src[y * 160 + x];
     uint8_t threshold = (uint8_t)(total / (100 * 100));
 
@@ -724,19 +724,15 @@ static void downsample_28x28(uint8_t *src, uint8_t *dst)
         }
     }
 
-    // ---> force border to black
+    // ---> only force left and right borders
     for(int i = 0; i < 28; i++)
     {
-      dst[i * 28 + 0]  = 0;
-      dst[i * 28 + 1]  = 0;
-      dst[i * 28 + 2]  = 0;
-      dst[i * 28 + 27] = 0;
-      dst[i * 28 + 26] = 0;
-      dst[i * 28 + 25] = 0;
-      dst[0  * 28 + i] = 0;
-      dst[1  * 28 + i] = 0;
-      dst[27 * 28 + i] = 0;
-      dst[26 * 28 + i] = 0;
+        dst[i * 28 + 0]  = 0;
+        dst[i * 28 + 1]  = 0;
+        dst[i * 28 + 2]  = 0;
+        dst[i * 28 + 27] = 0;
+        dst[i * 28 + 26] = 0;
+        dst[i * 28 + 25] = 0;
     }
 }
 //---------------------------------------------------------------------------------------------------------------------------

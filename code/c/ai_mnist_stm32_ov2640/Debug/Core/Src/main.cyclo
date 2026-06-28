@@ -28,5 +28,5 @@
 ../Core/Src/main.c:464:13:MX_GPIO_Init	1
 ../Core/Src/main.c:565:13:extract_gray	2
 ../Core/Src/main.c:680:13:downsample_28x28	12
-../Core/Src/main.c:750:6:MPU_Config	1
-../Core/Src/main.c:781:6:Error_Handler	1
+../Core/Src/main.c:746:6:MPU_Config	1
+../Core/Src/main.c:777:6:Error_Handler	1
