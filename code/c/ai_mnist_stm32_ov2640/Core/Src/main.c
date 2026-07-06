@@ -33,6 +33,9 @@
 // #include "mnist_196_24_12_10.h"
 // #include "mnist_400_16_10.h"
 #include "mnist_784_8_10.h"
+
+
+#include "rm68140.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -191,6 +194,54 @@ HAL_UART_Transmit(&huart3, dbg, strlen((char*)dbg), 100);
 HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_START\r\n", 13, 100);
 HAL_UART_Transmit(&huart3, frame_buf, 160 * 120 * 2, 5000);
 HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
+
+
+
+
+
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// LCD sanity check — no camera involved, just wiring + init + basic draw calls
+// ---------------------------------------------------------------------------------------------------------------------------
+ 
+HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_INIT_START\r\n", 16, 100);
+ 
+RM68140_Init();
+ 
+HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_INIT_DONE\r\n", 15, 100);
+ 
+// ---> step 1 : solid color fills, confirms bus timing + full-screen addressing work
+//      watch for: correct color (not swapped R/B), full coverage (no torn/partial fill),
+//      no visible tearing/glitch lines (would suggest WR pulse too fast for this panel)
+RM68140_FillScreen(COLOR_RED);
+HAL_Delay(1000);
+RM68140_FillScreen(COLOR_GREEN);
+HAL_Delay(1000);
+RM68140_FillScreen(COLOR_BLUE);
+HAL_Delay(1000);
+RM68140_FillScreen(COLOR_BLACK);
+ 
+// ---> step 2 : a rectangle at a known position, confirms SetWindow addressing
+//      (not just full-screen luck) — should appear as a clean box, top-left area
+RM68140_FillRect(20, 20, 119, 119, COLOR_WHITE);
+HAL_Delay(1000);
+ 
+// ---> step 3 : draw all 10 digits in a row, confirms DrawDigit segment logic
+//      and gives you a visual on segment proportions/spacing
+RM68140_FillScreen(COLOR_BLACK);
+for(uint8_t d = 0; d <= 9; d++)
+{
+    RM68140_DrawDigit(d, 10 + d * 30, 150, 4, COLOR_WHITE);
+}
+ 
+HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_TEST_DONE\r\n", 15, 100);
+ 
+
+
+
+
+
+
 
 
   /* USER CODE END 2 */
@@ -510,43 +561,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-//---------------------------------------------------------------------------------------------------------------------------
-// sensor_setting :
-//   ---> initializes the OV2640 camera sensor
-//   ---> sets format to YUV422 and resolution to QQVGA (160x120)
-//   ---> inputs : none
-//   ---> outputs : none
-//---------------------------------------------------------------------------------------------------------------------------
-// static void sensor_setting(void)
-// {
-//     // ---> control PWDN and RST pins
-//     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);  // PWDN low  ---> camera ON
-//     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);    // RST  high ---> out of reset
-//     HAL_Delay(100);
-
-//     // ---> link I2C bus and init sensor struct
-//     sensor.bus.i2c = &hi2c1;
-//     ov2640_init(&sensor);
-
-//     // ---> verify camera ID over SCCB
-//     sensor.write_reg(&sensor, BANK_SEL, 0x01);
-//     if(sensor.read_reg(&sensor, REG_PID) != sensor.pid)  Error_Handler();
-//     if(sensor.read_reg(&sensor, REG_VER) != sensor.rev)  Error_Handler();
-
-//     // ---> set format and resolution
-//     sensor.pixformat  = PIXFORMAT_YUV422;
-//     sensor.framesize  = FRAMESIZE_QQVGA;
-
-//     sensor.contrast_level   = 2;
-//     sensor.brightness_level = 2;
-//     sensor.saturation_level = 2;
-
-//     if(sensor.reset(&sensor) == -1)  Error_Handler();
-//     if(sensor.set(&sensor)   == -1)  Error_Handler();
-// }
-//---------------------------------------------------------------------------------------------------------------------------
-
-
 
 //---------------------------------------------------------------------------------------------------------------------------
 // extract_gray :
@@ -555,13 +569,6 @@ static void MX_GPIO_Init(void)
 //   ---> inputs  : src  ---> YUV422 buffer (160*120*2 bytes)
 //   ---> outputs : dst  ---> grayscale buffer (160*120 bytes)
 //---------------------------------------------------------------------------------------------------------------------------
-// static void extract_gray(uint8_t *src, uint8_t *dst)
-// {
-//     for(int i = 0; i < 160 * 120; i++)
-//     {
-//         dst[i] = src[i * 2];     // ---> Y byte is at every even index
-//     }
-// }
 static void extract_gray(uint8_t *src, uint8_t *dst)
 {
     for(int i = 0; i < 160 * 120; i++)
@@ -571,104 +578,6 @@ static void extract_gray(uint8_t *src, uint8_t *dst)
 }
 //---------------------------------------------------------------------------------------------------------------------------
 
-//---------------------------------------------------------------------------------------------------------------------------
-// downsample_14x14 :
-//   ---> center crops 112x112 from 160x120 grayscale then 8x8 avg pools to 14x14
-//   ---> crop offset : x_off=24, y_off=4 to center the 112x112 window
-//   ---> inputs  : src ---> grayscale buffer (160*120 bytes)
-//   ---> outputs : dst ---> 14x14 buffer (196 bytes)
-//---------------------------------------------------------------------------------------------------------------------------
-// static void downsample_14x14(uint8_t *src, uint8_t *dst)
-// {
-//     int x_off = 24;    // ---> (160 - 112) / 2
-//     int y_off = 4;     // ---> (120 - 112) / 2
-
-//     for(int row = 0; row < 14; row++)
-//     {
-//         for(int col = 0; col < 14; col++)
-//         {
-//             uint32_t sum = 0;
-
-//             // ---> average over 8x8 block
-//             for(int dy = 0; dy < 8; dy++)
-//             {
-//                 for(int dx = 0; dx < 8; dx++)
-//                 {
-//                     int y = y_off + row * 8 + dy;
-//                     int x = x_off + col * 8 + dx;
-//                     sum += src[y * 160 + x];
-//                 }
-//             }
-
-//             dst[row * 14 + col] = (uint8_t)(sum / 64);
-//         }
-//     }
-// }
-
-//---------------------------------------------------------------------------------------------------------------------------
-// downsample_20x20 :
-//   ---> center crops 120x120 from 160x120 grayscale then 6x6 avg pools to 20x20
-//   ---> then applies binarization threshold
-//   ---> crop offset : x_off=20, y_off=0 to center the 120x120 window
-//   ---> inputs  : src ---> grayscale buffer (160*120 bytes)
-//   ---> outputs : dst ---> 20x20 buffer (400 bytes)
-//---------------------------------------------------------------------------------------------------------------------------
-// static void downsample_20x20(uint8_t *src, uint8_t *dst)
-// {
-//     // ---> use only center 120x100 region to avoid edge noise
-//     // ---> x: 20 to 140 (skip 20px each side)
-//     // ---> y: 10 to 110 (skip 10px top and bottom)
-//     int x_start = 20;
-//     int y_start = 10;
-//     int width   = 120;   // ---> 140 - 20
-//     int height  = 100;   // ---> 110 - 10
-
-//     // ---> compute threshold from this safe region only
-//     uint32_t total = 0;
-//     for(int y = y_start; y < y_start + height; y++)
-//         for(int x = x_start; x < x_start + width; x++)
-//             total += src[y * 160 + x];
-//     uint8_t threshold = (uint8_t)(total / (width * height));
-
-//     // ---> downsample safe region to 20x20
-//     // ---> each block is 6x5 pixels
-//     for(int row = 0; row < 28; row++)
-//     {
-//         for(int col = 0; col < 28; col++)
-//         {
-//             uint32_t sum = 0;
-
-//             for(int dy = 0; dy < 5; dy++)
-//             {
-//                 for(int dx = 0; dx < 6; dx++)
-//                 {
-//                     int y = y_start + row * 5 + dy;
-//                     int x = x_start + col * 6 + dx;
-//                     sum += src[y * 160 + x];
-//                 }
-//             }
-
-//             uint8_t avg = (uint8_t)(sum / 30);
-
-//             // ---> dark digit on white paper → white on black like MNIST
-//             dst[row * 20 + col] = (avg < threshold) ? 255 : 0;
-//         }
-//     }
-
-//     // ---> force border pixels black ---> remove edge artifacts
-//     for(int i = 0; i < 28; i++)
-//     {
-//         dst[i *  28 + 0]  = 0;   // ---> left col 1
-//         dst[i *  28 + 1]  = 0;   // ---> left col 2
-//         dst[i *  28 + 2]  = 0;   // ---> left col 3
-//         dst[i *  28 + 17] = 0;   // ---> right col 3
-//         dst[i *  28 + 18] = 0;   // ---> right col 2
-//         dst[i *  28 + 19] = 0;   // ---> right col 1
-//         dst[0  * 28 + i] = 0;   // ---> top row
-//         dst[19 * 28 + i] = 0;   // ---> bottom row
-//     }
-
-// }
 //---------------------------------------------------------------------------------------------------------------------------
 // downsample_28x28 :
 //   ---> center crops 120x120 from 160x120 then downsamples to 28x28
