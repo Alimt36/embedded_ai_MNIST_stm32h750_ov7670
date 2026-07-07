@@ -214,11 +214,11 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_INIT_DONE\r\n", 15, 100);
 //      watch for: correct color (not swapped R/B), full coverage (no torn/partial fill),
 //      no visible tearing/glitch lines (would suggest WR pulse too fast for this panel)
 RM68140_FillScreen(COLOR_RED);
-HAL_Delay(1000);
+HAL_Delay(3000);
 RM68140_FillScreen(COLOR_GREEN);
-HAL_Delay(1000);
+HAL_Delay(3000);
 RM68140_FillScreen(COLOR_BLUE);
-HAL_Delay(1000);
+HAL_Delay(3000);
 RM68140_FillScreen(COLOR_BLACK);
  
 // ---> step 2 : a rectangle at a known position, confirms SetWindow addressing

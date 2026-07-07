@@ -6,8 +6,12 @@
 //---------------------------------------------------------------------------------------------------------------------------
 // RM68140 3.5" TFT LCD, 8-bit parallel (8080-style), 320x480 native, MIPI DCS compatible
 //---------------------------------------------------------------------------------------------------------------------------
-// ---> control pin mapping (fixed to GPIOE, matches project pin budget) :
-//          D0-D7 : PE8-PE15  (contiguous data bus, single ODR write)
+// ---> control + data pin mapping, split across two ports because PE14/PE15 had to stay
+//        free for UART3 access (unplugging it to wire the LCD wasn't acceptable), and
+//        the rest of GPIOE is already eaten by the camera + LCD control pins, so the
+//        2 leftover data lines moved to GPIOD, the emptiest port on this project :
+//          D0-D5 : PE8-PE13  (contiguous on GPIOE, one masked ODR write)
+//          D6-D7 : PD0-PD1   (contiguous on GPIOD, one masked ODR write)
 //          CS    : PE0
 //          RS/DC : PE1
 //          WR    : PE2
@@ -18,7 +22,9 @@
 //---------------------------------------------------------------------------------------------------------------------------
 // GPIO pin defines
 //---------------------------------------------------------------------------------------------------------------------------
-#define LCD_GPIO_PORT       GPIOE
+#define LCD_CTRL_PORT       GPIOE
+#define LCD_DATA_PORT_E     GPIOE
+#define LCD_DATA_PORT_D     GPIOD
 
 #define LCD_PIN_CS          GPIO_PIN_0
 #define LCD_PIN_RS          GPIO_PIN_1
@@ -26,8 +32,14 @@
 #define LCD_PIN_RD          GPIO_PIN_3
 #define LCD_PIN_RST         GPIO_PIN_7
 
-#define LCD_DATA_SHIFT      8            // ---> D0-D7 start at PE8
-#define LCD_DATA_MASK       (0xFFU << LCD_DATA_SHIFT)
+// ---> D0-D5 on PE8-PE13
+#define LCD_DATA_E_SHIFT    8            // ---> D0 starts at PE8
+#define LCD_DATA_E_BITS     6            // ---> D0..D5, 6 bits live on GPIOE
+#define LCD_DATA_E_MASK     (0x3FU << LCD_DATA_E_SHIFT)
+
+// ---> D6-D7 on PD0-PD1
+#define LCD_DATA_D_SHIFT    0             // ---> D6 starts at PD0
+#define LCD_DATA_D_MASK     (0x03U << LCD_DATA_D_SHIFT)
 
 //---------------------------------------------------------------------------------------------------------------------------
 // MIPI DCS command set (only what this driver actually uses)

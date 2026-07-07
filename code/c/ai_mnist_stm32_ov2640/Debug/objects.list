@@ -1,3 +1,4 @@
+"./Core/Src/Rm68140.o"
 "./Core/Src/main.o"
 "./Core/Src/ov7670.o"
 "./Core/Src/stm32h7xx_hal_msp.o"

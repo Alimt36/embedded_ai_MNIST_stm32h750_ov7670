@@ -39,34 +39,43 @@ static void low_delay_us(uint32_t us)
 
 //---------------------------------------------------------------------------------------------------------------------------
 // gpio_init :
-//   ---> configures PE0-PE3, PE7 (control) and PE8-PE15 (data bus) as push-pull outputs
+//   ---> configures PE0-PE3, PE7 (control), PE8-PE13 (D0-D5), and PD0-PD1 (D6-D7)
+//        as push-pull outputs
 //   ---> inputs : none
 //   ---> outputs : none
 //---------------------------------------------------------------------------------------------------------------------------
 static void gpio_init(void)
 {
     __HAL_RCC_GPIOE_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
 
     GPIO_InitTypeDef gpio = {0};
 
-    // ---> control pins : CS, RS, WR, RD, RST
+    // ---> control pins : CS, RS, WR, RD, RST (all on GPIOE)
     gpio.Pin   = LCD_PIN_CS | LCD_PIN_RS | LCD_PIN_WR | LCD_PIN_RD | LCD_PIN_RST;
     gpio.Mode  = GPIO_MODE_OUTPUT_PP;
     gpio.Pull  = GPIO_NOPULL;
     gpio.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(LCD_GPIO_PORT, &gpio);
+    HAL_GPIO_Init(LCD_CTRL_PORT, &gpio);
 
-    // ---> data bus : D0-D7 on PE8-PE15
-    gpio.Pin   = LCD_DATA_MASK;
+    // ---> data bus, low 6 bits : D0-D5 on PE8-PE13
+    gpio.Pin   = LCD_DATA_E_MASK;
     gpio.Mode  = GPIO_MODE_OUTPUT_PP;
     gpio.Pull  = GPIO_NOPULL;
     gpio.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(LCD_GPIO_PORT, &gpio);
+    HAL_GPIO_Init(LCD_DATA_PORT_E, &gpio);
+
+    // ---> data bus, high 2 bits : D6-D7 on PD0-PD1
+    gpio.Pin   = LCD_DATA_D_MASK;
+    gpio.Mode  = GPIO_MODE_OUTPUT_PP;
+    gpio.Pull  = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(LCD_DATA_PORT_D, &gpio);
 
     // ---> RD is never actually toggled for a read, held high always
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_RD, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_CS, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_WR, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_RD, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_CS, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_WR, GPIO_PIN_SET);
 }
 //---------------------------------------------------------------------------------------------------------------------------
 
@@ -75,20 +84,28 @@ static void gpio_init(void)
 //   ---> puts one byte on D0-D7 and pulses WR, CS held low for the whole transaction
 //   ---> inputs : byte to write
 //   ---> outputs : none
-//   ---> how it works : single ODR write for the whole data byte (contiguous PE8-PE15),
-//        so this is one instruction instead of 8 separate pin writes
+//   ---> how it works : data byte is split across two ports (D0-D5 on GPIOE, D6-D7 on
+//        GPIOD), so this is two masked ODR writes instead of one, but still far cheaper
+//        than 8 individual pin toggles
 //---------------------------------------------------------------------------------------------------------------------------
 static void write_bus_byte(uint8_t data)
 {
-    uint32_t odr = LCD_GPIO_PORT->ODR;
-    odr &= ~LCD_DATA_MASK;
-    odr |= ((uint32_t)data << LCD_DATA_SHIFT);
-    LCD_GPIO_PORT->ODR = odr;
+    // ---> low 6 bits (D0-D5) onto PE8-PE13
+    uint32_t odr_e = LCD_DATA_PORT_E->ODR;
+    odr_e &= ~LCD_DATA_E_MASK;
+    odr_e |= (((uint32_t)data & 0x3FU) << LCD_DATA_E_SHIFT);
+    LCD_DATA_PORT_E->ODR = odr_e;
+
+    // ---> top 2 bits (D6-D7) onto PD0-PD1
+    uint32_t odr_d = LCD_DATA_PORT_D->ODR;
+    odr_d &= ~LCD_DATA_D_MASK;
+    odr_d |= ((((uint32_t)data >> 6) & 0x03U) << LCD_DATA_D_SHIFT);
+    LCD_DATA_PORT_D->ODR = odr_d;
 
     // ---> WR pulse, low then high, panel latches data on rising edge
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_WR, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_WR, GPIO_PIN_RESET);
     low_delay_us(1);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_WR, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_WR, GPIO_PIN_SET);
 }
 //---------------------------------------------------------------------------------------------------------------------------
 
@@ -100,10 +117,10 @@ static void write_bus_byte(uint8_t data)
 //---------------------------------------------------------------------------------------------------------------------------
 static void write_cmd(uint8_t cmd)
 {
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_CS, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_RS, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_CS, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_RS, GPIO_PIN_RESET);
     write_bus_byte(cmd);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_CS, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_CS, GPIO_PIN_SET);
 }
 //---------------------------------------------------------------------------------------------------------------------------
 
@@ -115,10 +132,10 @@ static void write_cmd(uint8_t cmd)
 //---------------------------------------------------------------------------------------------------------------------------
 static void write_data(uint8_t data)
 {
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_CS, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_RS, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_CS, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_RS, GPIO_PIN_SET);
     write_bus_byte(data);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_CS, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_CS, GPIO_PIN_SET);
 }
 //---------------------------------------------------------------------------------------------------------------------------
 
@@ -143,11 +160,11 @@ static void write_data16(uint16_t color)
 //---------------------------------------------------------------------------------------------------------------------------
 static void hw_reset(void)
 {
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_RST, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_RST, GPIO_PIN_SET);
     HAL_Delay(10);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_RST, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_RST, GPIO_PIN_RESET);
     HAL_Delay(10);
-    HAL_GPIO_WritePin(LCD_GPIO_PORT, LCD_PIN_RST, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CTRL_PORT, LCD_PIN_RST, GPIO_PIN_SET);
     HAL_Delay(120); // ---> panel needs time after reset before accepting commands
 }
 //---------------------------------------------------------------------------------------------------------------------------
