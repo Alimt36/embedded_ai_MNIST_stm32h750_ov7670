@@ -9,14 +9,30 @@
 //---------------------------------------------------------------------------------------------------------------------------
 #define END_MARKER          0xFE
 #define CMD_DELAY           0xFD
+#define CMD_DISPOFF         0x28   // ---> display off, sent before configuring per reference driver
+#define CMD_INVOFF          0x20   // ---> display inversion off
+#define CMD_PGAMCTRL        0xE0   // ---> positive gamma control
+#define CMD_NGAMCTRL        0xE1   // ---> negative gamma control
 
 static const uint8_t init_table[] = {
     CMD_SWRESET, 0,                    // ---> software reset, no params
-    CMD_DELAY,   120,                  // ---> wait 120ms after reset (panel spec)
+    CMD_DELAY,   150,                  // ---> wait 150ms after reset (panel spec)
+    CMD_DISPOFF, 0,                    // ---> display off while configuring
     CMD_SLPOUT,  0,                    // ---> sleep out
-    CMD_DELAY,   120,                  // ---> wait 120ms after sleep out
+    CMD_DELAY,   150,                  // ---> wait 150ms after sleep out
+
+    // ---> gamma correction tables, known-good values from this panel family
+    //      (RM68140/ILI9486/ILI9488 share the same E0h/E1h gamma register layout)
+    //      ---> without these the panel can fall back to a flat/low-contrast default
+    //           curve, which reads as dim colors and gray instead of true white/black
+    CMD_PGAMCTRL, 15, 0x0F, 0x24, 0x1C, 0x0A, 0x0F, 0x08, 0x43, 0x88,
+                      0x32, 0x0F, 0x10, 0x06, 0x0F, 0x07, 0x00,
+    CMD_NGAMCTRL, 15, 0x0F, 0x38, 0x30, 0x09, 0x0F, 0x0F, 0x4E, 0x77,
+                      0x3C, 0x07, 0x10, 0x05, 0x23, 0x1B, 0x00,
+
     CMD_COLMOD,  1, COLMOD_16BIT,      // ---> 16-bit/pixel, RGB565
     CMD_MADCTL,  1, 0x48,              // ---> row/col exchange off, BGR order (typical for this panel family)
+    CMD_INVOFF,  0,                    // ---> force inversion off, panel can default to inverted (looks washed out/dim)
     CMD_DISPON,  0,                    // ---> display on
     CMD_DELAY,   20,
     END_MARKER,

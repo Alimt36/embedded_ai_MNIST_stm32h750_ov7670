@@ -1,0 +1,9 @@
+../Core/Src/ssd1306.c:75:26:write_cmd	32	static
+../Core/Src/ssd1306.c:88:26:run_init_table	16	static
+../Core/Src/ssd1306.c:107:19:SSD1306_Init	24	static
+../Core/Src/ssd1306.c:127:19:SSD1306_UpdateScreen	1048	static
+../Core/Src/ssd1306.c:155:6:SSD1306_Clear	16	static
+../Core/Src/ssd1306.c:172:6:SSD1306_DrawPixel	24	static
+../Core/Src/ssd1306.c:194:6:SSD1306_DrawGrayBuffer	24	static
+../Core/Src/ssd1306.c:248:13:fill_rect_fb	32	static
+../Core/Src/ssd1306.c:268:6:SSD1306_DrawDigit	32	static

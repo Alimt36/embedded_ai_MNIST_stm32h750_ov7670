@@ -35,7 +35,8 @@
 #include "mnist_784_8_10.h"
 
 
-#include "rm68140.h"
+// #include "rm68140.h"
+#include "ssd1306.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,6 +60,7 @@ DCMI_HandleTypeDef hdcmi;
 DMA_HandleTypeDef hdma_dcmi;
 
 I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c4;
 
 UART_HandleTypeDef huart3;
 
@@ -78,6 +80,7 @@ static void MX_DMA_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_I2C4_Init(void);
 /* USER CODE BEGIN PFP */
 // static void sensor_setting(void);
 
@@ -128,6 +131,7 @@ int main(void)
   MX_DCMI_Init();
   MX_I2C1_Init();
   MX_USART3_UART_Init();
+  MX_I2C4_Init();
   /* USER CODE BEGIN 2 */
 
 /* USER CODE BEGIN 2 */
@@ -200,47 +204,170 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"FRAME_END\r\n", 11, 100);
 
 
 
-// ---------------------------------------------------------------------------------------------------------------------------
-// LCD sanity check — no camera involved, just wiring + init + basic draw calls
-// ---------------------------------------------------------------------------------------------------------------------------
+// // ---------------------------------------------------------------------------------------------------------------------------
+// // LCD sanity check — no camera involved, just wiring + init + basic draw calls
+// // ---------------------------------------------------------------------------------------------------------------------------
  
-HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_INIT_START\r\n", 16, 100);
+// HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_INIT_START\r\n", 16, 100);
  
-RM68140_Init();
+// RM68140_Init();
  
-HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_INIT_DONE\r\n", 15, 100);
+// HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_INIT_DONE\r\n", 15, 100);
  
-// ---> step 1 : solid color fills, confirms bus timing + full-screen addressing work
-//      watch for: correct color (not swapped R/B), full coverage (no torn/partial fill),
-//      no visible tearing/glitch lines (would suggest WR pulse too fast for this panel)
-RM68140_FillScreen(COLOR_RED);
-HAL_Delay(3000);
-RM68140_FillScreen(COLOR_GREEN);
-HAL_Delay(3000);
-RM68140_FillScreen(COLOR_BLUE);
-HAL_Delay(3000);
-RM68140_FillScreen(COLOR_BLACK);
+// // ---> step 1 : solid color fills, confirms bus timing + full-screen addressing work
+// //      watch for: correct color (not swapped R/B), full coverage (no torn/partial fill),
+// //      no visible tearing/glitch lines (would suggest WR pulse too fast for this panel)
+// RM68140_FillScreen(COLOR_RED);
+// HAL_Delay(3000);
+// RM68140_FillScreen(COLOR_GREEN);
+// HAL_Delay(3000);
+// RM68140_FillScreen(COLOR_BLUE);
+// HAL_Delay(3000);
+// RM68140_FillScreen(COLOR_BLACK);
+// HAL_Delay(3000);
  
-// ---> step 2 : a rectangle at a known position, confirms SetWindow addressing
-//      (not just full-screen luck) — should appear as a clean box, top-left area
-RM68140_FillRect(20, 20, 119, 119, COLOR_WHITE);
-HAL_Delay(1000);
+// // ---> step 2 : a rectangle at a known position, confirms SetWindow addressing
+// //      (not just full-screen luck) — should appear as a clean box, top-left area
+// RM68140_FillRect(20, 20, 119, 119, COLOR_WHITE);
+// HAL_Delay(3000);
  
-// ---> step 3 : draw all 10 digits in a row, confirms DrawDigit segment logic
-//      and gives you a visual on segment proportions/spacing
-RM68140_FillScreen(COLOR_BLACK);
-for(uint8_t d = 0; d <= 9; d++)
+// // ---> step 3 : draw all 10 digits in a row, confirms DrawDigit segment logic
+// //      and gives you a visual on segment proportions/spacing
+// RM68140_FillScreen(COLOR_BLACK);
+// for(uint8_t d = 0; d <= 9; d++)
+// {
+//     RM68140_DrawDigit(d, 10 + d * 30, 150, 4, COLOR_WHITE);
+// }
+ 
+// HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_TEST_DONE\r\n", 15, 100);
+ 
+
+
+// // ---------------------------------------------------------------------------------------------------------------------------
+// // minimal bus/reset diagnostic - no full init sequence, just checks whether the panel
+// // reacts at all to reset + raw writes, and whether CS/RS/WR/RST are doing anything
+// // ---------------------------------------------------------------------------------------------------------------------------
+ 
+// HAL_UART_Transmit(&huart3, (uint8_t*)"DIAG_START\r\n", 12, 100);
+ 
+// // ---> raw GPIO setup, mirrors gpio_init() in rm68140.c but exposed here for direct control
+// __HAL_RCC_GPIOE_CLK_ENABLE();
+// __HAL_RCC_GPIOD_CLK_ENABLE();
+ 
+// GPIO_InitTypeDef gpio = {0};
+ 
+// gpio.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_7;
+// gpio.Mode  = GPIO_MODE_OUTPUT_PP;
+// gpio.Pull  = GPIO_NOPULL;
+// gpio.Speed = GPIO_SPEED_FREQ_HIGH;
+// HAL_GPIO_Init(GPIOE, &gpio);
+ 
+// gpio.Pin   = 0x3F << 8; // ---> PE8-PE13
+// HAL_GPIO_Init(GPIOE, &gpio);
+ 
+// gpio.Pin   = GPIO_PIN_0 | GPIO_PIN_1; // ---> PD0-PD1
+// HAL_GPIO_Init(GPIOD, &gpio);
+ 
+// // ---> idle state : CS high, WR high, RD high
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);   // CS
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);   // WR
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);   // RD
+ 
+// // ---> step 1 : hardware reset pulse, watch for ANY visible change on the panel
+// //      (a flicker, a color shift, backlight blink, anything) during this pulse
+// HAL_UART_Transmit(&huart3, (uint8_t*)"DIAG_RESET_PULSE\r\n", 19, 100);
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_7, GPIO_PIN_SET);
+// HAL_Delay(50);
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_7, GPIO_PIN_RESET);
+// HAL_Delay(50);
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_7, GPIO_PIN_SET);
+// HAL_Delay(200);
+ 
+// // ---> step 2 : send raw software-reset command (0x01) manually, no other setup
+// //      this is CS low + RS low + write 0x01 + CS high, the simplest possible bus transaction
+// HAL_UART_Transmit(&huart3, (uint8_t*)"DIAG_SWRESET\r\n", 14, 100);
+ 
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET); // CS low
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_1, GPIO_PIN_RESET); // RS low (command)
+ 
+// // ---> put 0x01 on the bus : low 6 bits on PE8-13, top 2 bits on PD0-1
+// uint32_t odr_e = GPIOE->ODR;
+// odr_e &= ~(0x3FU << 8);
+// odr_e |= ((0x01U & 0x3FU) << 8);
+// GPIOE->ODR = odr_e;
+ 
+// uint32_t odr_d = GPIOD->ODR;
+// odr_d &= ~0x03U;
+// odr_d |= ((0x01U >> 6) & 0x03U);
+// GPIOD->ODR = odr_d;
+ 
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_RESET); // WR low
+// HAL_Delay(1);
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_2, GPIO_PIN_SET);   // WR high, latch
+ 
+// HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET);   // CS high
+ 
+// HAL_Delay(200);
+ 
+// // ---> step 3 : repeatedly toggle every single data pin one at a time, holding each
+// //      HIGH for 500ms with CS/RS/WR in a fixed "write data" state, so if you're watching
+// //      the actual header pins with an LED or continuity buzzer (even without a multimeter's
+// //      voltage mode), you can confirm each pin is physically toggling in software
+// HAL_UART_Transmit(&huart3, (uint8_t*)"DIAG_PIN_WALK\r\n", 15, 100);
+ 
+// while(1)
+// {
+//     // ---> walk D0-D5 (GPIOE)
+//     for(int bit = 0; bit < 6; bit++)
+//     {
+//         uint8_t msg[20];
+//         sprintf((char*)msg, "PIN_D%d_HIGH\r\n", bit);
+//         HAL_UART_Transmit(&huart3, msg, strlen((char*)msg), 100);
+ 
+//         HAL_GPIO_WritePin(GPIOE, (uint16_t)(1 << (8 + bit)), GPIO_PIN_SET);
+//         HAL_Delay(500);
+//         HAL_GPIO_WritePin(GPIOE, (uint16_t)(1 << (8 + bit)), GPIO_PIN_RESET);
+//         HAL_Delay(100);
+//     }
+ 
+//     // ---> walk D6-D7 (GPIOD)
+//     for(int bit = 0; bit < 2; bit++)
+//     {
+//         uint8_t msg[20];
+//         sprintf((char*)msg, "PIN_D%d_HIGH\r\n", bit + 6);
+//         HAL_UART_Transmit(&huart3, msg, strlen((char*)msg), 100);
+ 
+//         HAL_GPIO_WritePin(GPIOD, (uint16_t)(1 << bit), GPIO_PIN_SET);
+//         HAL_Delay(500);
+//         HAL_GPIO_WritePin(GPIOD, (uint16_t)(1 << bit), GPIO_PIN_RESET);
+//         HAL_Delay(100);
+//     }
+// }
+ 
+
+// ---> scan I2C4 bus for the OLED
+uint8_t oled_addr = 0;
+for(uint8_t addr = 1; addr < 128; addr++)
 {
-    RM68140_DrawDigit(d, 10 + d * 30, 150, 4, COLOR_WHITE);
+    if(HAL_I2C_IsDeviceReady(&hi2c4, addr << 1, 1, 10) == HAL_OK)
+    {
+        oled_addr = addr;
+        HAL_UART_Transmit(&huart3, (uint8_t*)"OLED_FOUND:", 11, 100);
+        HAL_UART_Transmit(&huart3, &oled_addr, 1, 100);
+        HAL_UART_Transmit(&huart3, (uint8_t*)"\r\n", 2, 100);
+    }
 }
- 
-HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_TEST_DONE\r\n", 15, 100);
- 
 
-
-
-
-
+// ---> init OLED with whatever address the scan found
+if(oled_addr != 0)
+{
+    SSD1306_Init(&hi2c4, oled_addr << 1);
+    HAL_UART_Transmit(&huart3, (uint8_t*)"OLED_OK\r\n", 9, 100);
+}
+else
+{
+    HAL_UART_Transmit(&huart3, (uint8_t*)"OLED_NOT_FOUND\r\n", 16, 100);
+}
 
 
 
@@ -274,6 +401,15 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_TEST_DONE\r\n", 15, 100);
     // int predicted = mnist_model_predict(features, 400);
     int predicted = mnist_model_predict(features, 784);
 
+
+    if(oled_addr != 0)
+    {
+        SSD1306_Clear();
+        SSD1306_DrawGrayBuffer(small_buf, 0, 0, 2);
+        SSD1306_DrawDigit(predicted, 90, 20, 3);
+        SSD1306_UpdateScreen();
+    }
+
     // ---> send result over UART
     uint8_t result_buf[20];
     sprintf((char*)result_buf, "DIGIT:%d\r\n", predicted);
@@ -289,6 +425,15 @@ HAL_UART_Transmit(&huart3, (uint8_t*)"LCD_TEST_DONE\r\n", 15, 100);
     HAL_UART_Transmit(&huart3, frame_buf, 160 * 120 * 2, 2000);
 
     HAL_Delay(100);
+
+
+    // if(oled_addr != 0)
+    // {
+    //     SSD1306_Clear();
+    //     SSD1306_DrawGrayBuffer(small_buf, 0, 0, 2);
+    //     SSD1306_DrawDigit(predicted, 90, 20, 3);
+    //     SSD1306_UpdateScreen();
+    // }
 
 
     /* USER CODE END WHILE */
@@ -444,6 +589,54 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief I2C4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C4_Init(void)
+{
+
+  /* USER CODE BEGIN I2C4_Init 0 */
+
+  /* USER CODE END I2C4_Init 0 */
+
+  /* USER CODE BEGIN I2C4_Init 1 */
+
+  /* USER CODE END I2C4_Init 1 */
+  hi2c4.Instance = I2C4;
+  hi2c4.Init.Timing = 0x307075B1;
+  hi2c4.Init.OwnAddress1 = 0;
+  hi2c4.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c4.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c4.Init.OwnAddress2 = 0;
+  hi2c4.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c4.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c4.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c4, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c4, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C4_Init 2 */
+
+  /* USER CODE END I2C4_Init 2 */
+
+}
+
+/**
   * @brief USART3 Initialization Function
   * @param None
   * @retval None
@@ -524,8 +717,8 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);
