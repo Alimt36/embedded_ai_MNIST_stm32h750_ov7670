@@ -1826,10 +1826,11 @@ else
  8001030:	4916      	ldr	r1, [pc, #88]	@ (800108c <main+0x320>)
  8001032:	4812      	ldr	r0, [pc, #72]	@ (800107c <main+0x310>)
  8001034:	f009 f85c 	bl	800a0f0 <HAL_UART_Transmit>
-#endif
 
 #ifdef OLED_ENABLED
     // ---> hardware display : 28x28 preview + predicted digit on the OLED
+    //      note: this panel is a dual-color strip (yellow rows 0-15, blue rows 16-63),
+    //      so everything is drawn at y0=16 or below to stay fully in the blue zone
     if(oled_addr != 0)
  8001038:	4b1b      	ldr	r3, [pc, #108]	@ (80010a8 <main+0x33c>)
  800103a:	781b      	ldrb	r3, [r3, #0]
@@ -1838,17 +1839,17 @@ else
     {
         SSD1306_Clear();
  8001040:	f000 fd94 	bl	8001b6c <SSD1306_Clear>
-        SSD1306_DrawGrayBuffer(small_buf, 0, 0, 2);
- 8001044:	2302      	movs	r3, #2
- 8001046:	2200      	movs	r2, #0
+        SSD1306_DrawGrayBuffer(small_buf, 0, 16, 1);     // ---> 28x28 @ scale 1 = 28px tall, fits in y:16-43
+ 8001044:	2301      	movs	r3, #1
+ 8001046:	2210      	movs	r2, #16
  8001048:	2100      	movs	r1, #0
  800104a:	481c      	ldr	r0, [pc, #112]	@ (80010bc <main+0x350>)
  800104c:	f000 fdf4 	bl	8001c38 <SSD1306_DrawGrayBuffer>
-        SSD1306_DrawDigit(predicted, 90, 20, 3);
+        SSD1306_DrawDigit(predicted, 90, 24, 2);         // ---> smaller scale so it fits alongside, y:24-55
  8001050:	f8d7 3c98 	ldr.w	r3, [r7, #3224]	@ 0xc98
  8001054:	b2d8      	uxtb	r0, r3
- 8001056:	2303      	movs	r3, #3
- 8001058:	2214      	movs	r2, #20
+ 8001056:	2302      	movs	r3, #2
+ 8001058:	2218      	movs	r2, #24
  800105a:	215a      	movs	r1, #90	@ 0x5a
  800105c:	f000 fe84 	bl	8001d68 <SSD1306_DrawDigit>
         SSD1306_UpdateScreen();

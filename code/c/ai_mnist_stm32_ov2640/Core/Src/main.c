@@ -273,11 +273,13 @@ else
 
 #ifdef OLED_ENABLED
     // ---> hardware display : 28x28 preview + predicted digit on the OLED
+    //      note: this panel is a dual-color strip (yellow rows 0-15, blue rows 16-63),
+    //      so everything is drawn at y0=16 or below to stay fully in the blue zone
     if(oled_addr != 0)
     {
         SSD1306_Clear();
-        SSD1306_DrawGrayBuffer(small_buf, 0, 0, 2);
-        SSD1306_DrawDigit(predicted, 90, 20, 3);
+        SSD1306_DrawGrayBuffer(small_buf, 0, 16, 1);     // ---> 28x28 @ scale 1 = 28px tall, fits in y:16-43
+        SSD1306_DrawDigit(predicted, 90, 24, 2);         // ---> smaller scale so it fits alongside, y:24-55
         SSD1306_UpdateScreen();
     }
 #endif
